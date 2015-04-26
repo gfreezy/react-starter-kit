@@ -3,11 +3,12 @@
  * Copyright (c) KriaSoft, LLC. All rights reserved. See LICENSE.txt
  */
 
-'use strict';
-
 var _ = require('lodash');
 var webpack = require('webpack');
 var argv = require('minimist')(process.argv.slice(2));
+var SaveAssetsJson = require('assets-webpack-plugin');
+var ChunkManifestPlugin = require('chunk-manifest-webpack-plugin');
+var path = require('path');
 
 var DEBUG = !argv.release;
 
@@ -21,20 +22,19 @@ var GLOBALS = {
 };
 
 //
-// Common configuration chunk to be used for both
-// client-side (app.js) and server-side (server.js) bundles
+// Common configuration chunk
 // -----------------------------------------------------------------------------
 
 var config = {
   output: {
     path: './build/',
-    publicPath: './',
+    publicPath: 'static/build/',
     sourcePrefix: '  '
   },
 
   cache: DEBUG,
   debug: DEBUG,
-  devtool: DEBUG ? '#inline-source-map' : false,
+  devtool: DEBUG ? 'eval' : false,
 
   stats: {
     colors: true,
@@ -42,12 +42,15 @@ var config = {
   },
 
   plugins: [
-    new webpack.optimize.OccurenceOrderPlugin()
+    new webpack.optimize.OccurenceOrderPlugin(),
+    new ChunkManifestPlugin()
   ],
 
   resolve: {
     extensions: ['', '.webpack.js', '.web.js', '.js', '.jsx']
   },
+
+  recordsPath: path.join(__dirname, 'records.json'),
 
   module: {
     preLoaders: [
@@ -100,49 +103,20 @@ var config = {
 var appConfig = _.merge({}, config, {
   entry: './src/app.js',
   output: {
-    filename: 'app.js'
+    filename: DEBUG ? '[name].js' : '[name]-[hash].min.js'
   },
+
   plugins: config.plugins.concat([
       new webpack.DefinePlugin(_.merge(GLOBALS, {'__SERVER__': false}))
-    ].concat(DEBUG ? [] : [
+    ].concat(DEBUG ? [
+      new SaveAssetsJson()
+    ] : [
+      new webpack.optimize.AggressiveMergingPlugin(),
       new webpack.optimize.DedupePlugin(),
       new webpack.optimize.UglifyJsPlugin(),
-      new webpack.optimize.AggressiveMergingPlugin()
+      new SaveAssetsJson()
     ])
   )
 });
 
-//
-// Configuration for the server-side bundle (server.js)
-// -----------------------------------------------------------------------------
-
-var serverConfig = _.merge({}, config, {
-  entry: './src/server.js',
-  output: {
-    filename: 'server.js',
-    libraryTarget: 'commonjs2'
-  },
-  target: 'node',
-  externals: /^[a-z][a-z\.\-0-9]*$/,
-  node: {
-    console: false,
-    global: false,
-    process: false,
-    Buffer: false,
-    __filename: false,
-    __dirname: false
-  },
-  plugins: config.plugins.concat(
-    new webpack.DefinePlugin(_.merge(GLOBALS, {'__SERVER__': true}))
-  ),
-  module: {
-    loaders: config.module.loaders.map(function(loader) {
-      // Remove style-loader
-      return _.merge(loader, {
-        loader: loader.loader = loader.loader.replace('style-loader!', '')
-      });
-    })
-  }
-});
-
-module.exports = [appConfig, serverConfig];
+module.exports = [appConfig];

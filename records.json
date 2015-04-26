@@ -1,0 +1,11 @@
+{
+  "nextFreeModuleId": 1,
+  "modules": {
+    "byIdentifier": {}
+  },
+  "nextFreeChunkId": 0,
+  "chunks": {
+    "byName": {},
+    "byBlocks": {}
+  }
+}

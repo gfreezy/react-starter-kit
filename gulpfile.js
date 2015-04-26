@@ -6,8 +6,6 @@
  * LICENSE.txt file in the root directory of this source tree.
  */
 
-'use strict';
-
 // Include Gulp and other build automation tools and utilities
 // See: https://github.com/gulpjs/gulp/blob/master/docs/API.md
 var gulp = require('gulp');
@@ -46,7 +44,7 @@ gulp.task('clean', del.bind(
 
 // 3rd party libraries
 gulp.task('vendor', function() {
-  return gulp.src('node_modules/bootstrap/dist/fonts/**')
+  return gulp.src('node_modules/bootstrap-sass/fonts/bootstrap/**')
     .pipe(gulp.dest('build/fonts'));
 });
 
@@ -54,9 +52,7 @@ gulp.task('vendor', function() {
 gulp.task('assets', function() {
   src.assets = [
     'package.json',
-    'src/assets/**',
-    'src/content*/**/*.*',
-    'src/templates*/**/*.*'
+    'src/assets/**'
   ];
   return gulp.src(src.assets)
     .pipe($.changed('build'))
@@ -66,13 +62,12 @@ gulp.task('assets', function() {
 
 // CSS style sheets
 gulp.task('styles', function() {
-  src.styles = 'src/styles/**/*.{css,less}';
-  return gulp.src('src/styles/bootstrap.less')
+  src.styles = ['src/styles/index.scss'];
+  return gulp.src(src.styles)
     .pipe($.plumber())
-    .pipe($.less({
-      sourceMap: !RELEASE,
-      sourceMapBasepath: __dirname
-    }))
+    .pipe($.if(!RELEASE, $.sourcemaps.init()))
+    .pipe($.sass())
+    .pipe($.if(!RELEASE, $.sourcemaps.write()))
     .on('error', console.error.bind(console))
     .pipe($.autoprefixer({browsers: AUTOPREFIXER_BROWSERS}))
     .pipe($.csscomb())
@@ -124,48 +119,8 @@ gulp.task('build:watch', function(cb) {
   });
 });
 
-// Launch a Node.js/Express server
-gulp.task('serve', ['build:watch'], function(cb) {
-  src.server = [
-    'build/server.js',
-    'build/content/**/*',
-    'build/templates/**/*'
-  ];
-
-  var started = false;
-  var cp = require('child_process');
-  var assign = require('react/lib/Object.assign');
-
-  var server = (function startup() {
-    var child = cp.fork('build/server.js', {
-      env: assign({NODE_ENV: 'development'}, process.env)
-    });
-    child.once('message', function(message) {
-      if (message.match(/^online$/)) {
-        if (browserSync) {
-          browserSync.reload();
-        }
-        if (!started) {
-          started = true;
-          gulp.watch(src.server, function() {
-            $.util.log('Restarting development server.');
-            server.kill('SIGTERM');
-            server = startup();
-          });
-          cb();
-        }
-      }
-    });
-    return child;
-  })();
-
-  process.on('exit', function() {
-    server.kill('SIGTERM');
-  });
-});
-
 // Launch BrowserSync development server
-gulp.task('sync', ['serve'], function(cb) {
+gulp.task('sync', [], function(cb) {
   browserSync = require('browser-sync');
 
   browserSync({
@@ -177,37 +132,14 @@ gulp.task('sync', ['serve'], function(cb) {
     https: false,
     // Informs browser-sync to proxy our Express app which would run
     // at the following location
-    proxy: 'localhost:5000'
+    proxy: 'localhost:8080'
   }, cb);
 
   process.on('exit', function() {
     browserSync.exit();
   });
 
-  gulp.watch(['build/**/*.*'].concat(
-    src.server.map(function(file) { return '!' + file; })
-  ), function(file) {
+  gulp.watch(['build/**/*.*'], function(file) {
     browserSync.reload(path.relative(__dirname, file.path));
   });
-});
-
-// Deploy via Git
-gulp.task('deploy', function(cb) {
-  var push = require('git-push');
-  var remote = argv.production ?
-    'https://github.com/{user}/{repo}.git' :
-    'https://github.com/{user}/{repo}-test.git';
-  push('./build', remote, cb);
-});
-
-// Run PageSpeed Insights
-gulp.task('pagespeed', function(cb) {
-  var pagespeed = require('psi');
-  // Update the below URL to the public URL of your site
-  pagespeed.output('example.com', {
-    strategy: 'mobile'
-    // By default we use the PageSpeed Insights free (no API key) tier.
-    // Use a Google Developer API key if you have one: http://goo.gl/RkN0vE
-    // key: 'YOUR_API_KEY'
-  }, cb);
 });
